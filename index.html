@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Clock Grid — Timezones</title>
+  <style>
+    :root{
+      --bg:#0b1020; --panel:#0f1726; --muted:#98a0b3; --accent:#5865f2; --glass: rgba(255,255,255,0.04);
+      --box-small:140px; --box-medium:200px; --box-large:260px;
+      --radius:12px; --glass-border: rgba(255,255,255,0.04);
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    #local-time{font-weight:700;letter-spacing:1px;font-size:1.2rem}
+
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#061021 0%, #071225 60%);color:#e6eef8}
+    .app{max-width:1200px;margin:28px auto;padding:20px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:18px;margin:0;font-weight:600}
+    .controls{display:flex;gap:8px;align-items:center}
+    .btn{background:var(--glass);border:1px solid var(--glass-border);padding:8px 12px;border-radius:10px;color:var(--muted);cursor:pointer}
+    .btn:hover{border-color:rgba(255,255,255,0.08)}
+    .settings-panel{background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);padding:12px;border-radius:10px;border:1px solid var(--glass-border);display:flex;gap:12px;align-items:center}
+
+    .grid{display:grid;gap:12px;margin-top:14px}
+    /* box sizes with CSS variable that JS toggles */
+    .grid.small{grid-template-columns: repeat(auto-fill, minmax(var(--box-small), 1fr));}
+    .grid.medium{grid-template-columns: repeat(auto-fill, minmax(var(--box-medium), 1fr));}
+    .grid.large{grid-template-columns: repeat(auto-fill, minmax(var(--box-large), 1fr));}
+
+    .grid.small .card{min-height:var(--box-small)}
+    .grid.medium .card{min-height:var(--box-medium)}
+    .grid.large .card{min-height:var(--box-large)}
+
+    .grid.small .card .tzsmall { display: none;}
+
+    .card{position:relative;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06));padding:12px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+    .time-big{font-weight:700;letter-spacing:1px;font-size:1.2rem}
+    .tzsmall{font-size:12px;color:var(--muted);margin-top:6px}
+    .muted{color:var(--muted);font-size:13px}
+
+    .card .top{display:flex;justify-content:space-between;align-items:start}
+    .card .top .left { flex: 1 }
+    .card .meta{display:flex;flex-direction:column;align-items:flex-end}
+    .remove{background:transparent;border:0;color:var(--muted);cursor:pointer}
+    .remove:hover{color:tomato;}
+
+    .plus-card {
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:36px;
+        color:var(--accent);
+        border:2px dashed rgba(88,101,242,0.16) !important;
+        cursor:pointer;
+    }
+
+
+    /* centered big text overlay inside a card */
+    .big-overlay{
+      margin-top: 25%;
+      position:absolute;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      padding:8px;
+      pointer-events:none;
+      z-index:2;
+      color:rgba(230,238,248,0.95);
+      font-weight:800;
+      line-height:1;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+      word-break:break-word;
+      white-space:nowrap; /* try single line first */
+    }
+    .card .content{position:relative;z-index:1} /* content stays below overlay */
+
+    .card {
+        border: 2px solid transparent;
+    }
+    .card.orange { border-color: #ff8c0080; }
+    .card.red { border-color: #ff000080; }
+    .card.green { border-color: #00ff0080; }
+    .card.blue { border-color: #0000ff80; }
+    .card.purple { border-color: #80008080; }
+    .card.yellow { border-color: #ffff0080; }
+    .card.pink { border-color: #ffc0cb80; }
+    .card.brown { border-color: #a52a2a80; }
+    .card.black { border-color: #00000080; }
+    .card.white { border-color: #ffffff80; }
+    .card.gray { border-color: #80808080; }
+
+    /* Modal */
+    #modalAdd {
+        z-index: 100;
+    }
+    .modal h3 { margin-top: 0; }
+    .modal-back{position:fixed;inset:0;background:rgba(2,6,23,0.6);display:flex;align-items:center;justify-content:center}
+    .modal{width:520px;max-width:94%;background:var(--panel);padding:18px;border-radius:14px;border:1px solid rgba(255,255,255,0.04)}
+    label{display:block;font-size:13px;margin-bottom:6px}
+    input[type=text],select,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+    .row{display:flex;gap:8px;align-items:center}
+    .tz-list{max-height:220px;overflow:auto;margin-top:8px;border-radius:8px;padding:6px}
+    .tz-item{padding:8px;border-radius:8px;cursor:pointer}
+    .tz-item:hover{background:rgba(255,255,255,0.02)}
+
+    #modalAdd #cancelAdd {
+      background: transparent;
+    }
+    footer{margin-top:18px;color:var(--muted);font-size:13px}
+
+    @media (max-width:600px){h1{font-size:16px}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Clocks — <span id="local-time"></span></h1>
+      <div class="controls">
+        <div class="settings-panel">
+          <div>
+            <label style="font-size:12px;color:var(--muted);margin:0">Format</label>
+            <select id="formatSelect" title="Format d'heure">
+              <option value="24">24h</option>
+              <option value="12">12h</option>
+              <option value="36">36-ph</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--muted);margin:0">Taille</label>
+            <select id="sizeSelect" title="Taille des boxes">
+              <option value="small">Small</option>
+              <option value="medium" selected>Normal</option>
+              <option value="large">Large</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button id="importBtn" class="btn">Importer</button>
+            <button id="exportBtn" class="btn">Exporter</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div id="grid" class="grid"></div>
+    </main>
+
+    <footer>Made with <span style="color:red">❤</span> by <a href="https://imthespyke.fr" target="_blank">ImTheSpyke</a></footer>
+  </div>
+
+  <!-- modals -->
+  <div id="modalAdd" style="display:none" class="modal-back">
+    <div class="modal">
+      <h3>Add a clock</h3>
+
+      <label>Name displayed</label>
+      <input id="clockText" type="text" placeholder="e.g. 'My friend', 'Paris office', etc" />
+
+      <label style="margin-top:10px">Timezone / code IANA</label>
+      <input id="tzSearch" type="text" placeholder="e.g. Europe/Paris or UTC+x" />
+
+      <div class="tz-list" id="tzList"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+        <button id="cancelAdd" class="btn">Cancel</button>
+        <button id="confirmAdd" class="btn">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <input id="fileIn" type="file" accept="application/json" style="display:none" />
+
+  <script>
+    // keys
+    const LS_CLocks = 'tz_clocks_v1';
+    const LS_Settings = 'tz_settings_v1';
+
+    // default list
+    const defaultTZs = [
+      Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      'UTC','Europe/Paris','America/New_York','Asia/Tokyo','Australia/Sydney','America/Los_Angeles'
+    ];
+
+    // a small curated list to pick from for the add dialog
+    const COMMON_TZS = [
+      'UTC','Europe/London','Europe/Paris','Europe/Berlin','Europe/Moscow','Africa/Johannesburg',
+      'Asia/Tokyo','Asia/Shanghai','Asia/Kolkata','Asia/Dubai','Asia/Singapore',
+      'Australia/Sydney','Pacific/Auckland','America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
+      'America/Sao_Paulo','America/Argentina/Buenos_Aires'
+    ];
+
+    // load/save
+    function loadClocks(){
+      try{const raw=localStorage.getItem(LS_CLocks); return raw?JSON.parse(raw):defaultTZs.map(t=>({tz:t}));}catch(e){return defaultTZs.map(t=>({tz:t}));}
+    }
+    function saveClocks(arr){localStorage.setItem(LS_CLocks, JSON.stringify(arr)); clocks=arr;}
+
+    function loadSettings(){
+      const def = {format:'24',size:'medium'};
+      try{const raw=localStorage.getItem(LS_Settings); return raw?Object.assign(def,JSON.parse(raw)):def;}catch(e){return def}
+    }
+    function saveSettings(s){localStorage.setItem(LS_Settings, JSON.stringify(s));}
+
+    // tz helpers
+    function tzInfo(timeZone){
+      const now = new Date();
+      const fmt = new Intl.DateTimeFormat('en-US',{
+        timeZone, hour12:false, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', timeZoneName:'short'
+      });
+      const parts = {};
+      fmt.formatToParts(now).forEach(p=>{ if(p.type) parts[p.type]=p.value; });
+      const y=+parts.year, m=+parts.month, d=+parts.day, h=+parts.hour, min=+parts.minute, s=+parts.second;
+      const utcFromParts = Date.UTC(y,m-1,d,h,min,s);
+      const offsetMs = utcFromParts - now.getTime(); // positive means tz is ahead of UTC
+      const offsetMin = Math.round(offsetMs/60000);
+      const tzName = parts.timeZoneName || '';
+      return {y,m,d,h,min,s,offsetMin,tzName};
+    }
+
+    function fmtOffset(mins){
+      const sign = mins>=0?'+':'-';
+      const a = Math.abs(mins);
+      const hh = String(Math.floor(a/60)).padStart(2,'0');
+      const mm = String(a%60).padStart(2,'0');
+      return `${sign}${hh}:${mm}`;
+    }
+
+    // build UI
+    const gridEl = document.getElementById('grid');
+    let clocks = loadClocks();
+    let settings = loadSettings();
+
+    const sizeMap = {small:'var(--box-small)', medium:'var(--box-medium)', large:'var(--box-large)'};
+    document.getElementById('grid').classList.add(settings.size);
+    document.getElementById('formatSelect').value = settings.format;
+    document.getElementById('sizeSelect').value = settings.size;
+
+    // Utility: adapt overlay font-size so text fits nicely inside its card
+    function fitOverlayText(overlay, card){
+      if(!overlay || !card) return;
+      // reset styling to measure
+      overlay.style.whiteSpace = 'nowrap';
+      overlay.style.fontSize = ''; // let CSS initial apply
+      // start with a sensible max based on card height
+      const cardH = Math.max(40, card.clientHeight || parseInt(getComputedStyle(card).minHeight) || 120);
+      const maxFont = Math.min(48, Math.floor(cardH * 0.45)); // don't exceed ~45% of height
+      const minFont = 10;
+      // set to max then shrink until it fits
+      overlay.style.fontSize = maxFont + 'px';
+      // allow the browser to render then check scrollWidth
+      // loop decrementally (fast enough for short strings)
+      let fs = maxFont;
+      const padding = 24; // left/right internal padding consideration
+      while(fs > minFont && overlay.scrollWidth > card.clientWidth - padding){
+        fs -= 1;
+        overlay.style.fontSize = fs + 'px';
+      }
+      // if still overflowing (very long single word), allow wrapping and set minFont
+      if(overlay.scrollWidth > card.clientWidth - padding){
+        overlay.style.whiteSpace = 'normal';
+        overlay.style.fontSize = minFont + 'px';
+      }
+      // adjust for length of text
+      const textLen = overlay.textContent.length;
+      if(textLen <= 8) overlay.style.fontSize = settings.size == 'small' ? '1.5rem' : '2rem';
+      else if(textLen <= 20) overlay.style.fontSize = settings.size == 'small' ? '1.3rem' : '1.5rem';
+      else if(textLen <= 50) overlay.style.fontSize = settings.size == 'small' ? '1rem' : '1.3rem';
+      else overlay.style.fontSize = '1rem';
+    }
+
+    function diffMinToString(diffMin){
+        const sign = diffMin>=0?'+':'-';
+        const absd = Math.abs(diffMin);
+        const h = Math.floor(absd/60);
+        const m = absd%60;
+        let text = '';
+        if(h===0 && m===0){
+          text = '+0';
+        } else if(m===0 && h!==0){
+          text = `${sign}${h}h`;
+        } else if(m===30 && h!==0){
+          text = `${sign}${h}h30`;
+        } else {
+          text = `${sign}${h}h${String(m).padStart(2,'0')}`;
+        }
+        return text;
+    }
+
+    // render loop
+    function render(){
+
+        const localTime = document.getElementById('local-time');
+        const localTimeStr = formatTimeForDisplay(tzInfo('UTC'), settings.format);
+        localTime.innerText = localTimeStr;
+
+
+      gridEl.innerHTML='';
+      // each clock
+      const userTZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      const userOff = tzInfo(userTZ).offsetMin;
+      clocks.forEach((c, idx)=>{
+        const info = tzInfo(c.tz);
+        const diffMin = info.offsetMin - userOff; // minutes difference relative to user
+        const card = document.createElement('div');
+        card.className='card' + (c.text ? ' with-text' : '');
+
+        const top = document.createElement('div'); top.className='top';
+        const left = document.createElement('div');
+        const right = document.createElement('div'); right.className='meta';
+
+
+        left.classList.add("left")
+        right.classList.add("right")
+
+        // content wrapper (so overlay sits above)
+        const content = document.createElement('div'); content.className='content';
+
+        // time big
+        const timeBig = document.createElement('div'); timeBig.className='time-big';
+        timeBig.innerText = formatTimeForDisplay(info, settings.format);
+        content.appendChild(timeBig);
+
+        // tz label
+        const tzLabel = document.createElement('div'); tzLabel.className='tzsmall';
+        tzLabel.innerText = `${c.tz} — ${info.tzName || ''} (UTC${fmtOffset(info.offsetMin)})`;
+        content.appendChild(tzLabel);
+
+        // remove button
+        const remove = document.createElement('button'); remove.className='remove'; remove.innerText='✖';
+        remove.title = 'Supprimer';
+        remove.style.margin = '0px 0px 10px';
+        remove.style.padding = '2px 6px';
+        remove.onclick = ()=>{
+            let conf = confirm([
+                `Are you sure you want to remove this clock?`,
+                "",
+                `Name: ${c.text ? c.text : '<no name>'}`,
+                `Time: ${formatTimeForDisplay(info, settings.format)}`,
+                `Timezone: ${c.tz} — ${info.tzName || ''} (UTC${fmtOffset(info.offsetMin)})`
+            ].join("\n"));
+            if(!conf) return;
+            clocks.splice(idx,1); saveClocks(clocks); render();
+        };
+        right.appendChild(remove);
+
+        // diff
+        const diff = document.createElement('div'); diff.className='muted';
+        diff.innerText = `${diffMinToString(diffMin)}`;
+        right.appendChild(diff);
+
+
+        top.appendChild(left); top.appendChild(right);
+        left.appendChild(content);
+        card.appendChild(top);
+
+        // if there's a big text, create centered overlay
+        if(c.text){
+          const overlay = document.createElement('div');
+          overlay.className = 'big-overlay';
+          overlay.innerText = c.text;
+          card.appendChild(overlay);
+          // adjust size after it's in the DOM
+          requestAnimationFrame(()=> fitOverlayText(overlay, card));
+        }
+
+        gridEl.appendChild(card);
+      });
+
+      // plus card
+      const plus = document.createElement('div'); plus.className='card plus-card'; plus.innerHTML='+';
+      plus.onclick = ()=>openAddModal();
+      gridEl.appendChild(plus);
+    }
+
+    // Ensure overlays get resized when window changes
+    window.addEventListener('resize', ()=> {
+      // small debounce
+      if(window.__fitTimeout) clearTimeout(window.__fitTimeout);
+      window.__fitTimeout = setTimeout(()=>{
+        document.querySelectorAll('.card.with-text').forEach(card=>{
+          const overlay = card.querySelector('.big-overlay');
+          if(overlay) fitOverlayText(overlay, card);
+        });
+      }, 80);
+    });
+
+    function formatTimeForDisplay(info, format){
+      if(format === '36'){
+        const secondsSinceMidnight = info.h*3600 + info.min*60 + info.s;
+        const pheure = Math.floor(secondsSinceMidnight / 2400); // 36 * 2400 = 86400
+        const rem = secondsSinceMidnight % 2400;
+        const pminute = Math.floor(rem / 60);
+        const psecond = rem % 60;
+        return String(pheure).padStart(2,'0') + ':' + String(pminute).padStart(2,'0') + ':' + String(psecond).padStart(2,'0') + ' ph';
+      }
+      let hh = info.h;
+      const mm = String(info.min).padStart(2,'0');
+      const ss = String(info.s).padStart(2,'0');
+      if(format === '12'){
+        const am = hh<12;
+        let hh12 = hh%12; if(hh12===0) hh12=12;
+        return `${String(hh12).padStart(2,'0')}:${mm}:${ss} ${am?'AM':'PM'}`;
+      }
+      // 24
+      return `${String(hh).padStart(2,'0')}:${mm}:${ss}`;
+    }
+
+    // update every second
+    //setInterval(render, 1000);
+    render();
+
+    // settings handlers
+    document.getElementById('formatSelect').addEventListener('change', (e)=>{
+      settings.format = e.target.value; saveSettings(settings); render();
+    });
+    document.getElementById('sizeSelect').addEventListener('change', (e)=>{
+      settings.size = e.target.value; saveSettings(settings);
+      document.getElementById("grid").classList.remove("small", "medium", "large");
+      document.getElementById("grid").classList.add(settings.size);
+      render();
+    });
+
+    // import/export
+    document.getElementById('exportBtn').addEventListener('click', ()=>{
+      const data = clocks.map(c=>({tz: c.tz, text: c.text, offset: c.offset, id: c.id}));
+      const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'clocks.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('importBtn').addEventListener('click', ()=>{
+      document.getElementById('fileIn').click();
+    });
+    document.getElementById('fileIn').addEventListener('change', async (e)=>{
+      const f = e.target.files[0]; if(!f) return; try{
+        const txt = await f.text(); const parsed = JSON.parse(txt);
+        if(Array.isArray(parsed)){
+          // accept array of objects {tz: 'Europe/Paris', text: 'Home'} or array of strings
+          let imported_clocks;
+          if(typeof parsed[0] === 'string') { imported_clocks = parsed.map(t=>({tz:t})); }
+          else {
+            imported_clocks = parsed.map(o=>({tz:o.tz||o.timeZone||o.timezone||'UTC', text: o.text||o.label||o.name||'', offset: o.offset||0}));
+          }
+          
+          // get current clocks, compare the imported ones with ID and add to the list the one not present then save all
+          let current_clocks = clocks;
+          const clock_to_actually_import = []
+          for(let clk of imported_clocks){
+            const found = current_clocks.find(c=>c.id === clk.id);
+            if(!found) clock_to_actually_import.push(clk);
+          }
+
+          const new_clocks = [...clocks, ...clock_to_actually_import];
+
+          saveClocks(new_clocks); render();
+          confirm(`Imported ${clock_to_actually_import.length} clocks. ${clock_to_actually_import.length != clocks.length ? `Skipped ${clocks.length-clock_to_actually_import.length} already present clocks.` : ''}`)
+        } else alert('JSON invalide: il faut un tableau.');
+      }catch(err){alert('Erreur import: '+err.message)} finally{e.target.value='';}
+    });
+
+    // add modal
+    const modal = document.getElementById('modalAdd');
+    const tzList = document.getElementById('tzList');
+    const tzSearch = document.getElementById('tzSearch');
+    const clockText = document.getElementById('clockText');
+    let tzSelected = null;
+
+
+    modal.addEventListener('click', (e)=>{
+        // if click outside, close
+        if(e.target === modal) modal.style.display='none';
+    });
+
+    // if press escape key, close
+    document.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape') modal.style.display='none';
+    });
+
+    function openAddModal(){
+      modal.style.display='flex';
+      tzSearch.value='';
+      clockText.value='';
+      renderTZList();
+      tzSearch.focus();
+    }
+    document.getElementById('cancelAdd').addEventListener('click', ()=>{ modal.style.display='none'; });
+    document.getElementById('confirmAdd').addEventListener('click', ()=>{
+      const val = tzSelected || tzSearch.value.trim();
+      if(!val) return alert('Select or type a timezone IANA.');
+      // basic validation: try tzInfo
+      try{ tzInfo(val); }catch(e){ return alert('Invalid timezone. Use an IANA identifier (e.g: Europe/Paris).'); }
+      const text = (clockText.value || '').trim();
+      clocks.push({tz:val, text: text, offset: tzInfo(val).offsetMin - tzInfo('UTC').offsetMin, id: Date.now()});
+      saveClocks(clocks); modal.style.display='none'; render();
+    });
+
+    function renderTZList(filterString){
+      tzList.innerHTML='';
+      const allTimeZones = Intl.supportedValuesOf('timeZone');
+      allTimeZones.map(tz=> {
+        return {tz, offset: tzInfo(tz).offsetMin};
+      }).sort((a,b)=>(a.offset - b.offset))
+      .map(tz_object=>{
+        return {
+            tz: tz_object.tz,
+            offset: tz_object.offset,
+            text: `UTC${diffMinToString(tz_object.offset)} — ${tz_object.tz}`
+        }
+      }).filter(tz_object=> {
+        if(!filterString) return true;
+        return tz_object.text.toLowerCase().includes(filterString.toLowerCase());
+      })
+      .forEach(tz_object=>{
+        let tz = tz_object.tz;
+        const offset = tz_object.offset;
+        const el = document.createElement('div'); el.className='tz-item'; el.innerText = tz_object.text;
+        el.onclick = ()=>{ tzSelected = tz; tzSearch.value = tz; Array.from(tzList.children).forEach(c=>c.style.background=''); el.style.background = 'rgba(88,101,242,0.08)'; };
+        tzList.appendChild(el);
+      });
+    }
+    tzSearch.addEventListener('input', ()=>{
+      const q = tzSearch.value.trim().toLowerCase();
+      renderTZList(q)
+    });
+
+    // initialize if empty
+    if(!localStorage.getItem(LS_CLocks)){
+      clocks = defaultTZs.map(t=>({tz:t})); saveClocks(clocks);
+    }
+  </script>
+</body>
+</html>
