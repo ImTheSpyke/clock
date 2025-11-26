@@ -185,8 +185,7 @@
 
     // default list
     const defaultTZs = [
-      Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-      'UTC','Europe/Paris','America/New_York','Asia/Tokyo','Australia/Sydney','America/Los_Angeles'
+      'Europe/Paris','Australia/Sydney'
     ];
 
     // a small curated list to pick from for the add dialog
@@ -414,7 +413,7 @@
     }
 
     // update every second
-    //setInterval(render, 1000);
+    setInterval(render, 1000);
     render();
 
     // settings handlers
@@ -535,6 +534,7 @@
     if(!localStorage.getItem(LS_CLocks)){
       clocks = defaultTZs.map(t=>({tz:t})); saveClocks(clocks);
     }
+
   </script>
 </body>
 </html>
