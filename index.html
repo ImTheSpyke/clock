@@ -61,6 +61,9 @@
         cursor:pointer;
     }
 
+    select{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+    select option{background:var(--panel)}
+
 
     /* centered big text overlay inside a card */
     .big-overlay{
@@ -128,23 +131,23 @@
         <div class="settings-panel">
           <div>
             <label style="font-size:12px;color:var(--muted);margin:0">Format</label>
-            <select id="formatSelect" title="Format d'heure">
+            <select id="formatSelect" title="Hour format">
               <option value="24">24h</option>
               <option value="12">12h</option>
-              <option value="36">36-ph</option>
+              <option value="36">36</option>
             </select>
           </div>
           <div>
-            <label style="font-size:12px;color:var(--muted);margin:0">Taille</label>
-            <select id="sizeSelect" title="Taille des boxes">
+            <label style="font-size:12px;color:var(--muted);margin:0">Size</label>
+            <select id="sizeSelect" title="Size of boxes">
               <option value="small">Small</option>
               <option value="medium" selected>Normal</option>
               <option value="large">Large</option>
             </select>
           </div>
           <div style="display:flex;gap:6px;align-items:center">
-            <button id="importBtn" class="btn">Importer</button>
-            <button id="exportBtn" class="btn">Exporter</button>
+            <button id="importBtn" class="btn">Import</button>
+            <button id="exportBtn" class="btn">Export</button>
           </div>
         </div>
       </div>
@@ -188,6 +191,7 @@
       'Europe/Paris','Australia/Sydney'
     ];
 
+    /*
     // a small curated list to pick from for the add dialog
     const COMMON_TZS = [
       'UTC','Europe/London','Europe/Paris','Europe/Berlin','Europe/Moscow','Africa/Johannesburg',
@@ -195,6 +199,7 @@
       'Australia/Sydney','Pacific/Auckland','America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
       'America/Sao_Paulo','America/Argentina/Buenos_Aires'
     ];
+    */
 
     // load/save
     function loadClocks(){
@@ -334,7 +339,7 @@
 
         // remove button
         const remove = document.createElement('button'); remove.className='remove'; remove.innerText='✖';
-        remove.title = 'Supprimer';
+        remove.title = 'Delete';
         remove.style.margin = '0px 0px 10px';
         remove.style.padding = '2px 6px';
         remove.onclick = ()=>{
@@ -432,7 +437,8 @@
       const data = clocks.map(c=>({tz: c.tz, text: c.text, offset: c.offset, id: c.id}));
       const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = 'clocks.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      let fileName = `clocks-${new Date().toISOString()}.json`;
+      const a = document.createElement('a'); a.href = url; a.download = fileName; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     });
 
     document.getElementById('importBtn').addEventListener('click', ()=>{
@@ -461,8 +467,8 @@
 
           saveClocks(new_clocks); render();
           confirm(`Imported ${clock_to_actually_import.length} clocks. ${clock_to_actually_import.length != clocks.length ? `Skipped ${clocks.length-clock_to_actually_import.length} already present clocks.` : ''}`)
-        } else alert('JSON invalide: il faut un tableau.');
-      }catch(err){alert('Erreur import: '+err.message)} finally{e.target.value='';}
+        } else alert('Invalid JSON: must be an array of type Array<{tz: string, text: string, offset: number, id: number}>');
+      }catch(err){alert('Import error: '+err.message)} finally{e.target.value='';}
     });
 
     // add modal
