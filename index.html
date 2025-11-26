@@ -301,9 +301,13 @@
     // render loop
     function render(){
 
-        const localTime = document.getElementById('local-time');
-        const localTimeStr = formatTimeForDisplay(tzInfo('UTC'), settings.format);
-        localTime.innerText = localTimeStr;
+        function renderLocalClock() {
+            const localTime = document.getElementById('local-time');
+            const userTZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+            const localTimeStr = formatTimeForDisplay(tzInfo(userTZ), settings.format);
+            localTime.innerText = `${localTimeStr} (for current timezone: ${userTZ})`;
+        }
+        renderLocalClock()
 
 
       gridEl.innerHTML='';
