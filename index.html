@@ -13,11 +13,10 @@
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
-    #local-time{font-weight:700;letter-spacing:1px;font-size:1.2rem}
+    #local-time{font-weight:700;letter-spacing:1px;font-size:1.2rem; font-size: 1.5rem;}
+    #local-time-timezone{font-size:12px;color:var(--muted);margin-top:6px}
 
     html,body{height:100%;margin:0;background:linear-gradient(180deg,#061021 0%, #071225 60%);color:#e6eef8}
     .app{max-width:1200px;margin:28px auto;padding:20px}
@@ -40,7 +39,11 @@
 
     .grid.small .card .tzsmall { display: none;}
 
-    .card{position:relative;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06));padding:12px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+    .card{position:relative;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06));padding:12px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column;justify-content:space-between;overflow:hidden; user-select: none;}
+    .card[draggable="true"]{cursor:grab;}
+    .card.dragging{opacity:0.45; transform: scale(0.98); cursor:grabbing;}
+    .card.drag-over{outline:2px dashed rgba(88,101,242,0.7); outline-offset: -6px;}
+
     .time-big{font-weight:700;letter-spacing:1px;font-size:1.2rem}
     .tzsmall{font-size:12px;color:var(--muted);margin-top:6px}
     .muted{color:var(--muted);font-size:13px}
@@ -64,7 +67,6 @@
     select{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
     select option{background:var(--panel)}
 
-
     /* centered big text overlay inside a card */
     .big-overlay{
       margin-top: 25%;
@@ -86,9 +88,7 @@
     }
     .card .content{position:relative;z-index:1} /* content stays below overlay */
 
-    .card {
-        border: 2px solid transparent;
-    }
+    .card { border: 2px solid transparent; }
     .card.orange { border-color: #ff8c0080; }
     .card.red { border-color: #ff000080; }
     .card.green { border-color: #00ff0080; }
@@ -102,9 +102,7 @@
     .card.gray { border-color: #80808080; }
 
     /* Modal */
-    #modalAdd {
-        z-index: 100;
-    }
+    #modalAdd { z-index: 100; }
     .modal h3 { margin-top: 0; }
     .modal-back{position:fixed;inset:0;background:rgba(2,6,23,0.6);display:flex;align-items:center;justify-content:center}
     .modal{width:520px;max-width:94%;background:var(--panel);padding:18px;border-radius:14px;border:1px solid rgba(255,255,255,0.04)}
@@ -115,9 +113,7 @@
     .tz-item{padding:8px;border-radius:8px;cursor:pointer}
     .tz-item:hover{background:rgba(255,255,255,0.02)}
 
-    #modalAdd #cancelAdd {
-      background: transparent;
-    }
+    #modalAdd #cancelAdd { background: transparent; }
     footer{margin-top:18px;color:var(--muted);font-size:13px}
 
     @media (max-width:600px){h1{font-size:16px}}
@@ -126,7 +122,7 @@
 <body>
   <div class="app">
     <header>
-      <h1>Clocks — <span id="local-time"></span></h1>
+      <h1><span id="local-time"></span> <span id="local-time-timezone">aaaa</span></h1>
       <div class="controls">
         <div class="settings-panel">
           <div>
@@ -191,16 +187,6 @@
       'Europe/Paris','Australia/Sydney'
     ];
 
-    /*
-    // a small curated list to pick from for the add dialog
-    const COMMON_TZS = [
-      'UTC','Europe/London','Europe/Paris','Europe/Berlin','Europe/Moscow','Africa/Johannesburg',
-      'Asia/Tokyo','Asia/Shanghai','Asia/Kolkata','Asia/Dubai','Asia/Singapore',
-      'Australia/Sydney','Pacific/Auckland','America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
-      'America/Sao_Paulo','America/Argentina/Buenos_Aires'
-    ];
-    */
-
     // load/save
     function loadClocks(){
       try{const raw=localStorage.getItem(LS_CLocks); return raw?JSON.parse(raw):defaultTZs.map(t=>({tz:t}));}catch(e){return defaultTZs.map(t=>({tz:t}));}
@@ -212,6 +198,12 @@
       try{const raw=localStorage.getItem(LS_Settings); return raw?Object.assign(def,JSON.parse(raw)):def;}catch(e){return def}
     }
     function saveSettings(s){localStorage.setItem(LS_Settings, JSON.stringify(s));}
+
+    // ensure every clock has an id
+    function ensureIds(arr){
+      let base = Date.now();
+      return arr.map((c,i)=>{ if(!c.id) c.id = String(base + i); else c.id = String(c.id); return c; });
+    }
 
     // tz helpers
     function tzInfo(timeZone){
@@ -239,7 +231,8 @@
 
     // build UI
     const gridEl = document.getElementById('grid');
-    let clocks = loadClocks();
+    let clocks = ensureIds(loadClocks());
+    saveClocks(clocks);
     let settings = loadSettings();
 
     const sizeMap = {small:'var(--box-small)', medium:'var(--box-medium)', large:'var(--box-large)'};
@@ -247,32 +240,30 @@
     document.getElementById('formatSelect').value = settings.format;
     document.getElementById('sizeSelect').value = settings.size;
 
+    // drag state
+    let draggingId = null;
+    let isDragging = false;
+    let dropTargetId = null;
+
     // Utility: adapt overlay font-size so text fits nicely inside its card
     function fitOverlayText(overlay, card){
       if(!overlay || !card) return;
-      // reset styling to measure
       overlay.style.whiteSpace = 'nowrap';
-      overlay.style.fontSize = ''; // let CSS initial apply
-      // start with a sensible max based on card height
+      overlay.style.fontSize = '';
       const cardH = Math.max(40, card.clientHeight || parseInt(getComputedStyle(card).minHeight) || 120);
-      const maxFont = Math.min(48, Math.floor(cardH * 0.45)); // don't exceed ~45% of height
+      const maxFont = Math.min(48, Math.floor(cardH * 0.45));
       const minFont = 10;
-      // set to max then shrink until it fits
       overlay.style.fontSize = maxFont + 'px';
-      // allow the browser to render then check scrollWidth
-      // loop decrementally (fast enough for short strings)
       let fs = maxFont;
-      const padding = 24; // left/right internal padding consideration
+      const padding = 24;
       while(fs > minFont && overlay.scrollWidth > card.clientWidth - padding){
         fs -= 1;
         overlay.style.fontSize = fs + 'px';
       }
-      // if still overflowing (very long single word), allow wrapping and set minFont
       if(overlay.scrollWidth > card.clientWidth - padding){
         overlay.style.whiteSpace = 'normal';
         overlay.style.fontSize = minFont + 'px';
       }
-      // adjust for length of text
       const textLen = overlay.textContent.length;
       if(textLen <= 8) overlay.style.fontSize = settings.size == 'small' ? '1.5rem' : '2rem';
       else if(textLen <= 20) overlay.style.fontSize = settings.size == 'small' ? '1.3rem' : '1.5rem';
@@ -298,32 +289,63 @@
         return text;
     }
 
+    function swap(list, index1, index2) {
+        if (
+            !Array.isArray(list) || 
+            index1 < 0 || index2 < 0 || 
+            index1 >= list.length || index2 >= list.length
+        ) {
+            throw new Error("Invalid arguments");
+        }
+
+        const temp = list[index1];
+        list[index1] = list[index2];
+        list[index2] = temp;
+    }
+
+    // reorder helper
+    function reorderClocks(sourceId, targetId, after){
+      sourceId = String(sourceId);
+      targetId = String(targetId);
+
+      const sourceIndex = clocks.findIndex(c=>String(c.id) === sourceId);
+      const targetIndex = clocks.findIndex(c=>String(c.id) === targetId);
+
+      swap(clocks, sourceIndex, targetIndex);
+
+    }
+
     // render loop
     function render(){
+      // while dragging, avoid tearing up the DOM (which would cancel drag)
+      if(isDragging) return;
 
-        function renderLocalClock() {
-            const localTime = document.getElementById('local-time');
-            const userTZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-            const localTimeStr = formatTimeForDisplay(tzInfo(userTZ), settings.format);
-            localTime.innerText = `${localTimeStr} (for current timezone: ${userTZ})`;
-        }
-        renderLocalClock()
-
+      function renderLocalClock() {
+          const localTime = document.getElementById('local-time');
+          const localTimeTimezone = document.getElementById('local-time-timezone');
+          const userTZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+          const localTimeStr = formatTimeForDisplay(tzInfo(userTZ), settings.format);
+          localTime.innerText = `${localTimeStr}`;
+          localTimeTimezone.innerText = `(${userTZ})`;
+      }
+      renderLocalClock();
 
       gridEl.innerHTML='';
       // each clock
       const userTZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
       const userOff = tzInfo(userTZ).offsetMin;
+
       clocks.forEach((c, idx)=>{
         const info = tzInfo(c.tz);
         const diffMin = info.offsetMin - userOff; // minutes difference relative to user
         const card = document.createElement('div');
         card.className='card' + (c.text ? ' with-text' : '');
+        card.dataset.id = String(c.id);
+        card.setAttribute('draggable','true');
 
         const top = document.createElement('div'); top.className='top';
         const left = document.createElement('div');
         const right = document.createElement('div'); right.className='meta';
-
 
         left.classList.add("left")
         right.classList.add("right")
@@ -346,7 +368,7 @@
         remove.title = 'Delete';
         remove.style.margin = '0px 0px 10px';
         remove.style.padding = '2px 6px';
-        remove.onclick = ()=>{
+        remove.onclick = ()=> {
             let conf = confirm([
                 `Are you sure you want to remove this clock?`,
                 "",
@@ -355,7 +377,8 @@
                 `Timezone: ${c.tz} — ${info.tzName || ''} (UTC${fmtOffset(info.offsetMin)})`
             ].join("\n"));
             if(!conf) return;
-            clocks.splice(idx,1); saveClocks(clocks); render();
+            const i = clocks.findIndex(x=>String(x.id) === String(c.id));
+            if(i !== -1) { clocks.splice(i,1); saveClocks(clocks); render(); }
         };
         right.appendChild(remove);
 
@@ -363,7 +386,6 @@
         const diff = document.createElement('div'); diff.className='muted';
         diff.innerText = `${diffMinToString(diffMin)}`;
         right.appendChild(diff);
-
 
         top.appendChild(left); top.appendChild(right);
         left.appendChild(content);
@@ -375,9 +397,54 @@
           overlay.className = 'big-overlay';
           overlay.innerText = c.text;
           card.appendChild(overlay);
-          // adjust size after it's in the DOM
           requestAnimationFrame(()=> fitOverlayText(overlay, card));
         }
+
+        // drag handlers
+        card.addEventListener('dragstart', (e)=>{
+          isDragging = true;
+          draggingId = String(c.id);
+          e.dataTransfer.setData('text/plain', draggingId);
+          e.dataTransfer.effectAllowed = 'move';
+          card.classList.add('dragging');
+        });
+
+        card.addEventListener('dragend', (e)=>{
+          // cleanup; if user cancelled, re-render to sync DOM
+          isDragging = false;
+          draggingId = null;
+          dropTargetId = null;
+          document.querySelectorAll('.card').forEach(n=>n.classList.remove('drag-over','dragging'));
+          render();
+        });
+
+        card.addEventListener('dragover', (e)=>{
+          e.preventDefault();
+          const t = e.currentTarget;
+          if(t.classList.contains('plus-card')) return;
+          const targetId = t.dataset.id;
+          if(!targetId || targetId === draggingId) return;
+          document.querySelectorAll('.card').forEach(n=>n.classList.remove('drag-over'));
+          t.classList.add('drag-over');
+          dropTargetId = targetId;
+        });
+
+        card.addEventListener('drop', (e)=>{
+          e.preventDefault();
+          const sourceId = e.dataTransfer.getData('text/plain') || draggingId;
+          const target = e.currentTarget;
+          const targetId = target.dataset.id;
+          if(!sourceId || !targetId) return;
+          if(sourceId === targetId) return;
+          reorderClocks(sourceId, targetId);
+          saveClocks(clocks);
+          // finalize
+          isDragging = false;
+          draggingId = null;
+          dropTargetId = null;
+          document.querySelectorAll('.card').forEach(n=>n.classList.remove('drag-over','dragging'));
+          render();
+        });
 
         gridEl.appendChild(card);
       });
@@ -385,12 +452,35 @@
       // plus card
       const plus = document.createElement('div'); plus.className='card plus-card'; plus.innerHTML='+';
       plus.onclick = ()=>openAddModal();
+      plus.setAttribute('draggable','false');
       gridEl.appendChild(plus);
     }
 
+    // allow dropping on the grid to append at end
+    gridEl.addEventListener('dragover', (e)=>{ e.preventDefault(); });
+    gridEl.addEventListener('drop', (e)=>{
+        return;
+        /*
+      e.preventDefault();
+      const sourceId = e.dataTransfer.getData('text/plain') || draggingId;
+      if(!sourceId) return;
+      const idx = clocks.findIndex(c=>String(c.id) === String(sourceId));
+      if(idx === -1) return;
+      const [item] = clocks.splice(idx,1);
+      const targetIdx = clocks.findIndex(c=>String(c.id) === dropTargetId);
+      if(targetIdx === -1) clocks.push(item);
+      else clocks.splice(targetIdx, 0, item);
+      saveClocks(clocks);
+      isDragging = false;
+      draggingId = null;
+      dropTargetId = null;
+      document.querySelectorAll('.card').forEach(n=>n.classList.remove('drag-over','dragging'));
+      render();
+      */
+    });
+
     // Ensure overlays get resized when window changes
     window.addEventListener('resize', ()=> {
-      // small debounce
       if(window.__fitTimeout) clearTimeout(window.__fitTimeout);
       window.__fitTimeout = setTimeout(()=>{
         document.querySelectorAll('.card.with-text').forEach(card=>{
@@ -417,7 +507,6 @@
         let hh12 = hh%12; if(hh12===0) hh12=12;
         return `${String(hh12).padStart(2,'0')}:${mm}:${ss} ${am?'AM':'PM'}`;
       }
-      // 24
       return `${String(hh).padStart(2,'0')}:${mm}:${ss}`;
     }
 
@@ -452,25 +541,20 @@
       const f = e.target.files[0]; if(!f) return; try{
         const txt = await f.text(); const parsed = JSON.parse(txt);
         if(Array.isArray(parsed)){
-          // accept array of objects {tz: 'Europe/Paris', text: 'Home'} or array of strings
           let imported_clocks;
           if(typeof parsed[0] === 'string') { imported_clocks = parsed.map(t=>({tz:t})); }
           else {
-            imported_clocks = parsed.map(o=>({tz:o.tz||o.timeZone||o.timezone||'UTC', text: o.text||o.label||o.name||'', offset: o.offset||0}));
-          }
-          
-          // get current clocks, compare the imported ones with ID and add to the list the one not present then save all
-          let current_clocks = clocks;
-          const clock_to_actually_import = []
-          for(let clk of imported_clocks){
-            const found = current_clocks.find(c=>c.id === clk.id);
-            if(!found) clock_to_actually_import.push(clk);
+            imported_clocks = parsed.map(o=>({tz:o.tz||o.timeZone||o.timezone||'UTC', text: o.text||o.label||o.name||'', offset: o.offset||0, id: o.id }));
           }
 
-          const new_clocks = [...clocks, ...clock_to_actually_import];
-
-          saveClocks(new_clocks); render();
-          confirm(`Imported ${clock_to_actually_import.length} clocks. ${clock_to_actually_import.length != clocks.length ? `Skipped ${clocks.length-clock_to_actually_import.length} already present clocks.` : ''}`)
+          // ensure ids and avoid duplicates by id
+          imported_clocks = ensureIds(imported_clocks);
+          const currentIds = new Set(clocks.map(c=>String(c.id)));
+          const toAdd = imported_clocks.filter(ic => !currentIds.has(String(ic.id)));
+          const new_clocks = [...clocks, ...toAdd];
+          clocks = ensureIds(new_clocks);
+          saveClocks(clocks); render();
+          confirm(`Imported ${toAdd.length} clocks.`);
         } else alert('Invalid JSON: must be an array of type Array<{tz: string, text: string, offset: number, id: number}>');
       }catch(err){alert('Import error: '+err.message)} finally{e.target.value='';}
     });
@@ -482,13 +566,10 @@
     const clockText = document.getElementById('clockText');
     let tzSelected = null;
 
-
     modal.addEventListener('click', (e)=>{
-        // if click outside, close
         if(e.target === modal) modal.style.display='none';
     });
 
-    // if press escape key, close
     document.addEventListener('keydown', (e)=>{
       if(e.key === 'Escape') modal.style.display='none';
     });
@@ -504,10 +585,11 @@
     document.getElementById('confirmAdd').addEventListener('click', ()=>{
       const val = tzSelected || tzSearch.value.trim();
       if(!val) return alert('Select or type a timezone IANA.');
-      // basic validation: try tzInfo
       try{ tzInfo(val); }catch(e){ return alert('Invalid timezone. Use an IANA identifier (e.g: Europe/Paris).'); }
       const text = (clockText.value || '').trim();
-      clocks.push({tz:val, text: text, offset: tzInfo(val).offsetMin - tzInfo('UTC').offsetMin, id: Date.now()});
+      const newClock = {tz:val, text: text, offset: tzInfo(val).offsetMin - tzInfo('UTC').offsetMin, id: String(Date.now())};
+      clocks.push(newClock);
+      clocks = ensureIds(clocks);
       saveClocks(clocks); modal.style.display='none'; render();
     });
 
@@ -517,19 +599,13 @@
       allTimeZones.map(tz=> {
         return {tz, offset: tzInfo(tz).offsetMin};
       }).sort((a,b)=>(a.offset - b.offset))
-      .map(tz_object=>{
-        return {
-            tz: tz_object.tz,
-            offset: tz_object.offset,
-            text: `UTC${diffMinToString(tz_object.offset)} — ${tz_object.tz}`
-        }
-      }).filter(tz_object=> {
+      .map(tz_object=>{ return { tz: tz_object.tz, offset: tz_object.offset, text: `UTC${diffMinToString(tz_object.offset)} — ${tz_object.tz}` } })
+      .filter(tz_object=> {
         if(!filterString) return true;
         return tz_object.text.toLowerCase().includes(filterString.toLowerCase());
       })
       .forEach(tz_object=>{
         let tz = tz_object.tz;
-        const offset = tz_object.offset;
         const el = document.createElement('div'); el.className='tz-item'; el.innerText = tz_object.text;
         el.onclick = ()=>{ tzSelected = tz; tzSearch.value = tz; Array.from(tzList.children).forEach(c=>c.style.background=''); el.style.background = 'rgba(88,101,242,0.08)'; };
         tzList.appendChild(el);
@@ -542,7 +618,7 @@
 
     // initialize if empty
     if(!localStorage.getItem(LS_CLocks)){
-      clocks = defaultTZs.map(t=>({tz:t})); saveClocks(clocks);
+      clocks = ensureIds(defaultTZs.map(t=>({tz:t}))); saveClocks(clocks);
     }
 
   </script>
